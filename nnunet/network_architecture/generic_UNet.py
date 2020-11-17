@@ -22,6 +22,23 @@ from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
 import torch.nn.functional
 
+from nnunet.network_architecture.non_local import  NONLocalBlock3D
+
+# Weight standardization Convolution
+class Conv2d(nn.Conv2d):
+    def __init__(self, in_channels, output_channels, kernel_size, stride=1,
+                    padding=0, dilation=1, groups=1, bias=True):
+        super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding,
+                                    dilation, groups, bias)
+    
+    def forward(self, x):
+        weight = self.weight
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(
+                            dim3, keepdim=True)
+        weight = weight - weight_mean
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1,1,1,1) + 1e-5
+        weight = weight / std.expand_as(weight)
+        return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 class ConvDropoutNormNonlin(nn.Module):
     """
@@ -29,7 +46,7 @@ class ConvDropoutNormNonlin(nn.Module):
     """
 
     def __init__(self, input_channels, output_channels,
-                 conv_op=nn.Conv2d, conv_kwargs=None,
+                 conv_op=Conv2d, conv_kwargs=None,
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout2d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None):
@@ -60,9 +77,12 @@ class ConvDropoutNormNonlin(nn.Module):
             self.dropout = None
         self.instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
         self.lrelu = self.nonlin(**self.nonlin_kwargs)
+        #self.nonlocal_block = NLBlockND(in_channels=output_channels, dimension=3)
+        
 
     def forward(self, x):
         x = self.conv(x)
+        #x = self.nonlocal_block(x)
         if self.dropout is not None:
             x = self.dropout(x)
         return self.lrelu(self.instnorm(x))
@@ -136,7 +156,8 @@ class StackedConvLayers(nn.Module):
               [basic_block(output_feature_channels, output_feature_channels, self.conv_op,
                            self.conv_kwargs,
                            self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
-                           self.nonlin, self.nonlin_kwargs) for _ in range(num_convs - 1)]))
+                           self.nonlin, self.nonlin_kwargs) for _ in range(num_convs - 1)])
+                           )
 
     def forward(self, x):
         return self.blocks(x)
@@ -385,22 +406,50 @@ class Generic_UNet(SegmentationNetwork):
         if self.weightInitializer is not None:
             self.apply(self.weightInitializer)
             # self.apply(print_module_training_status)
+        
+        self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
+        self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
+        self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+        self.nnblock_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+        self.nnblock_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+
+        self.nnblock_list = [
+            self.nnblock_32,
+            self.nnblock_64,
+            self.nnblock_128,
+            self.nnblock_256,
+            self.nnblock_320,
+            self.nnblock_320,
+        ]
 
     def forward(self, x):
         skips = []
         seg_outputs = []
-        for d in range(len(self.conv_blocks_context) - 1):
+        for idx, d in enumerate(range(len(self.conv_blocks_context) - 1)):
             x = self.conv_blocks_context[d](x)
             skips.append(x)
             if not self.convolutional_pooling:
                 x = self.td[d](x)
 
+            if idx >2:
+                x = self.nnblock_list[idx](x)
+       
         x = self.conv_blocks_context[-1](x)
 
-        for u in range(len(self.tu)):
+        for idx, u in enumerate(range(len(self.tu))):
             x = self.tu[u](x)
             x = torch.cat((x, skips[-(u + 1)]), dim=1)
             x = self.conv_blocks_localization[u](x)
+
+            if idx < 3:
+                x = self.nnblock_list[5-idx](x)
+
+            '''
+            if idx < 2:
+                x = self.nnblock_320(x)
+            if idx == 2:
+                x = self.nnblock_256(x)
+            '''
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
         if self._deep_supervision and self.do_ds:
