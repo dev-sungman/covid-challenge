@@ -1,7 +1,30 @@
 
 # COVID-19 Challenge
 
+### Root
 
+|── README.md
+
+|── environment_setup.sh
+
+|── conver_testformat.py
+
+|── nnunet
+
+|── data (please download the data via download link)
+
+
+
+### Setting Environment
+
+1. Setup environment path.
+
+   ```
+   # ./environment_setup.sh
+   ```
+
+2. Download the data [[link](https://drive.google.com/drive/folders/194hHX5cOFoPi0VvIKNMoAIqHppG1YwWI?usp=sharing)] and locate it in root directory. 
+   
 
 ### Training
 
