@@ -22,7 +22,7 @@
 ### Setting Environment
 
 ```
-# ./environment_setup.sh
+source ./environment_setup.sh
 ```
 
 
