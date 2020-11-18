@@ -64,6 +64,11 @@ def main():
     parser.add_argument("--disable_saving", required=False, action='store_true',
                         help="If set nnU-Net will not save any parameter files. Useful for development when you are "
                              "only interested in the results and want to save some disk space")
+
+    parser.add_argument("--use_nnblock", required=False, default=False, action="store_true")
+    parser.add_argument("--use_ws", required=False, default=False, action="store_true", 
+                    help="If you want to use Weight Standardization please set this argument true")
+
     # parser.add_argument("--interp_order", required=False, default=3, type=int,
     #                     help="order of interpolation for segmentations. Testing purpose only. Hands off")
     # parser.add_argument("--interp_order_z", required=False, default=0, type=int,
@@ -132,7 +137,7 @@ def main():
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
-                            fp16=run_mixed_precision)
+                            fp16=run_mixed_precision, use_nnblock=args.use_nnblock, use_ws=args.use_ws)
 
     if args.disable_saving:
         trainer.save_latest_only = False  # if false it will not store/overwrite _latest but separate files each
