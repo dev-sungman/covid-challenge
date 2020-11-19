@@ -214,9 +214,9 @@ class Generic_UNet(SegmentationNetwork):
                  upscale_logits=False, convolutional_pooling=False, convolutional_upsampling=False,
                  max_num_features=None, basic_block=ConvDropoutNormNonlin,
                  seg_output_use_bias=False,
-                 skip_attention=False, 
-                 nnblock=False, 
-                 use_ws=False):
+                 use_nnblock=False, 
+                 use_ws=False,
+                 use_skip_attention=False):
         """
         basically more flexible than v1, architecture is the same
 
@@ -254,7 +254,8 @@ class Generic_UNet(SegmentationNetwork):
         self.final_nonlin = final_nonlin
         self._deep_supervision = deep_supervision
         self.do_ds = deep_supervision
-        self.skip_attention = skip_attention
+        self.use_nnblock = use_nnblock
+        self.use_skip_attention = use_skip_attention
 
         if conv_op == nn.Conv2d:
             upsample_mode = 'bilinear'
@@ -300,7 +301,7 @@ class Generic_UNet(SegmentationNetwork):
         output_features = base_num_features
         input_features = input_channels
 
-        if self.skip_attention:
+        if self.use_skip_attention:
             self.skip_attentions = []
 
         for d in range(num_pool):
@@ -321,8 +322,10 @@ class Generic_UNet(SegmentationNetwork):
             if not self.convolutional_pooling:
                 self.td.append(pool_op(pool_op_kernel_sizes[d]))
 
-            if self.skip_attention:
-                self.skip_attentions.append(SkipAttentionBlock(output_features, output_features, output_features//2))
+            if self.use_skip_attention:
+                sab = SkipAttentionBlock(output_features, output_features, output_features//2)
+                sab = sab.cuda()
+                self.skip_attentions.append(sab)
 
             input_features = output_features
             output_features = int(np.round(output_features * feat_map_mul_on_downscale))
@@ -421,7 +424,7 @@ class Generic_UNet(SegmentationNetwork):
             self.apply(self.weightInitializer)
             # self.apply(print_module_training_status)
         
-        if nnblock is True:
+        if self.use_nnblock is True:
             self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
             self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
             self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
@@ -440,29 +443,29 @@ class Generic_UNet(SegmentationNetwork):
     def forward(self, x):
         skips = []
         seg_outputs = []
-        for idx, d in enumerate(range(len(self.conv_blocks_context) - 1)):
+        for d in range(len(self.conv_blocks_context) - 1):
             x = self.conv_blocks_context[d](x)
             skips.append(x)
             if not self.convolutional_pooling:
                 x = self.td[d](x)
 
-            if (idx >2) & (nnblock is True):
-                x = self.nnblock_list[idx](x)
+            if (d >2) & (self.use_nnblock is True):
+                x = self.nnblock_list[d](x)
        
         x = self.conv_blocks_context[-1](x)
 
-        for idx, u in enumerate(range(len(self.tu))):
+        for u in range(len(self.tu)):
             x = self.tu[u](x)
-            if self.skip_attention:
-                skip = self.skip_attentions[-(u + 1)](skips[-(u + 1)])
+            if self.use_skip_attention:
+                skip = self.skip_attentions[-(u + 1)](x, skips[-(u + 1)])
             else:
                 skip = skips[-(u + 1)]
 
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
 
-            if (idx < 3) & (nnblock is True):
-                x = self.nnblock_list[5-idx](x)
+            if (u < 3) & (self.use_nnblock is True):
+                x = self.nnblock_list[5-u](x)
 
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
