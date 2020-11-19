@@ -20,7 +20,7 @@ import torch
 import numpy as np
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
-import torch.nn.functional
+import torch.nn.functional as F
 
 from nnunet.network_architecture.non_local import NONLocalBlock3D
 from nnunet.network_architecture.skip_attention import SkipAttentionBlock
@@ -46,7 +46,7 @@ class ConvDropoutNormNonlin(nn.Module):
     """
 
     def __init__(self, input_channels, output_channels,
-                 conv_op=Conv2d, conv_kwargs=None,
+                 conv_op=nn.Conv2d, conv_kwargs=None,
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout2d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None):
@@ -214,7 +214,9 @@ class Generic_UNet(SegmentationNetwork):
                  upscale_logits=False, convolutional_pooling=False, convolutional_upsampling=False,
                  max_num_features=None, basic_block=ConvDropoutNormNonlin,
                  seg_output_use_bias=False,
-                 skip_attention=False):
+                 skip_attention=False, 
+                 nnblock=False, 
+                 use_ws=False):
         """
         basically more flexible than v1, architecture is the same
 
@@ -242,7 +244,10 @@ class Generic_UNet(SegmentationNetwork):
         self.dropout_op_kwargs = dropout_op_kwargs
         self.norm_op_kwargs = norm_op_kwargs
         self.weightInitializer = weightInitializer
-        self.conv_op = conv_op
+        if use_ws is False:
+            self.conv_op = conv_op
+        else:
+            self.conv_op = Conv2d
         self.norm_op = norm_op
         self.dropout_op = dropout_op
         self.num_classes = num_classes
@@ -416,20 +421,21 @@ class Generic_UNet(SegmentationNetwork):
             self.apply(self.weightInitializer)
             # self.apply(print_module_training_status)
         
-        self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
-        self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
-        self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
-        self.nnblock_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-        self.nnblock_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+        if nnblock is True:
+            self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
+            self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
+            self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            self.nnblock_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+            self.nnblock_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
 
-        self.nnblock_list = [
-            self.nnblock_32,
-            self.nnblock_64,
-            self.nnblock_128,
-            self.nnblock_256,
-            self.nnblock_320,
-            self.nnblock_320,
-        ]
+            self.nnblock_list = [
+                self.nnblock_32,
+                self.nnblock_64,
+                self.nnblock_128,
+                self.nnblock_256,
+                self.nnblock_320,
+                self.nnblock_320,
+            ]
 
     def forward(self, x):
         skips = []
@@ -440,7 +446,7 @@ class Generic_UNet(SegmentationNetwork):
             if not self.convolutional_pooling:
                 x = self.td[d](x)
 
-            if idx >2:
+            if (idx >2) & (nnblock is True):
                 x = self.nnblock_list[idx](x)
        
         x = self.conv_blocks_context[-1](x)
@@ -455,15 +461,9 @@ class Generic_UNet(SegmentationNetwork):
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
 
-            if idx < 3:
+            if (idx < 3) & (nnblock is True):
                 x = self.nnblock_list[5-idx](x)
 
-            '''
-            if idx < 2:
-                x = self.nnblock_320(x)
-            if idx == 2:
-                x = self.nnblock_256(x)
-            '''
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
         if self._deep_supervision and self.do_ds:
