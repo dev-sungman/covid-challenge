@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
-class NLBlockND(nn.Module):
+class NONLocalBlock3D(nn.Module):
     def __init__(self, in_channels, inter_channels=None, mode='embedded', 
                  dimension=3, bn_layer=True):
         """Implementation of Non-Local Block with 4 different pairwise functions but doesn't include subsampling trick
@@ -14,7 +14,7 @@ class NLBlockND(nn.Module):
             dimension: can be 1 (temporal), 2 (spatial), 3 (spatiotemporal)
             bn_layer: whether to add batch norm
         """
-        super(NLBlockND, self).__init__()
+        super(NONLocalBlock3D, self).__init__()
 
         assert dimension in [1, 2, 3]
         
@@ -139,17 +139,17 @@ if __name__ == '__main__':
 
     for bn_layer in [True, False]:
         img = torch.zeros(2, 3, 20)
-        net = NLBlockND(in_channels=3, mode='concatenate', dimension=1, bn_layer=bn_layer)
+        net = NONLocalBlock3D(in_channels=3, mode='concatenate', dimension=1, bn_layer=bn_layer)
         out = net(img)
         print(out.size())
 
         img = torch.zeros(2, 3, 20, 20)
-        net = NLBlockND(in_channels=3, mode='concatenate', dimension=2, bn_layer=bn_layer)
+        net = NONLocalBlock3D(in_channels=3, mode='concatenate', dimension=2, bn_layer=bn_layer)
         out = net(img)
         print(out.size())
 
         img = torch.randn(2, 3, 8, 20, 20)
-        net = NLBlockND(in_channels=3, mode='concatenate', dimension=3, bn_layer=bn_layer)
+        net = NONLocalBlock3D(in_channels=3, mode='concatenate', dimension=3, bn_layer=bn_layer)
         out = net(img)
         print(out.size())
 
