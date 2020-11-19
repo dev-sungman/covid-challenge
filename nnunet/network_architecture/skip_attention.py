@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class SkipAttentionBlock(nn.Module):
     def __init__(self, F_g, F_l, F_int):
-        super(SkipAttentionBlock,self).__init__()
+        super(SkipAttentionBlock, self).__init__()
         self.W_g = nn.Sequential(
             nn.Conv3d(F_g, F_int, kernel_size=1, stride=1, padding=0, bias=True),
             nn.BatchNorm3d(F_int)
