@@ -54,6 +54,12 @@ def restore_model(pkl_file, checkpoint=None, train=False, fp16=None):
     :return:
     """
     info = load_pickle(pkl_file)
+    ## If the model cannot be loaded due to new arguments, 
+    ## set 'init' manually in the order of 'init_args' of nnUnetTrainer in nnunet/training/network_training/nnUnetTrainer as follows.
+
+    # init = ('/workspace/nnUNet_preprocessed/Task000_MYTASK/nnUNetPlansv2.1_plans_3D.pkl', 
+    #         1, '/workspace/nnUNet_trained_models/nnUNet/3d_fullres/Task000_MYTASK/nnUNetTrainerV2__nnUNetPlansv2.1', 
+    #         '/workspace/nnUNet_preprocessed/Task000_MYTASK', True, 1, True, False, True, True, False, True)
     init = info['init']
     name = info['name']
     search_in = join(nnunet.__path__[0], "training", "network_training")
