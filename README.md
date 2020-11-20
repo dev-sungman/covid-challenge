@@ -33,6 +33,7 @@ source ./environment_setup.sh
 
 * --use_nnblock: if you want to use 3D nnblock, please use this argument
 * --use_ws : if you want to use weight standardization, please use this argument
+* --use_skip_attention : if you want to use skip attention, please use this argument
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 python nnunet/run/run_training.py 3d_fullres nnUNetTrainerV2 Task000_MYTASK -f 0 --use_nnblock --use_ws
