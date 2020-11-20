@@ -1,2 +1,6 @@
 nnUNet_preprocessed/
 nnUNet_raw_data_base/
+*.pyc
+*.txt
+*.json
+*.pkl

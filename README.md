@@ -35,13 +35,25 @@ source ./environment_setup.sh
 * --use_ws : if you want to use weight standardization, please use this argument
 * --use_skip_attention : if you want to use skip attention, please use this argument
 
+
+
 ```bash
 CUDA_VISIBLE_DEVICES=1 python nnunet/run/run_training.py 3d_fullres nnUNetTrainerV2 Task000_MYTASK -f 0 --use_nnblock --use_ws
 ```
 
+If you run above the script, you can find your training results:
+
+> nnUNet_trained_models/nnUNet/3d_fullres/Task000_MYTASK/fold_0
+
 
 
 ### Inference
+
+* You have to rename your .model, .pkl files. Please change the name of the model and pickle files named 'model_best.model', 'model_best.model.pkl' by following the below conditions.
+
+  > model : model_final_checkpoint.model
+  >
+  > pickle : model_final_checkpoint.model.pkl
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 python nnunet/inference/predict_simple.py -i nnUNet_raw_data_base/nnUNet_raw_data/Task000_MYTASK/imagesTs -o '$output_path' -t Task000_MYTASK -m 3d_fullres -f 0
