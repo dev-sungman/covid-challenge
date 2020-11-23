@@ -423,19 +423,24 @@ class Generic_UNet(SegmentationNetwork):
             # self.apply(print_module_training_status)
         
         if self.use_nnblock is True:
-            self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
-            self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
-            self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
-            self.nnblock_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-            self.nnblock_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_down_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            self.nnblock_down_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+            self.nnblock_down_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            
+            self.nnblock_up_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            self.nnblock_up_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+            self.nnblock_up_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
 
-            self.nnblock_list = [
-                self.nnblock_32,
-                self.nnblock_64,
-                self.nnblock_128,
-                self.nnblock_256,
-                self.nnblock_320,
-                self.nnblock_320,
+            self.nnblock_down_list = [
+                self.nnblock_down_256,
+                self.nnblock_down_320,
+                self.nnblock_down_320
+            ]
+            
+            self.nnblock_up_list = [
+                self.nnblock_up_256,
+                self.nnblock_up_320,
+                self.nnblock_up_320
             ]
 
     def forward(self, x):
@@ -448,7 +453,7 @@ class Generic_UNet(SegmentationNetwork):
                 x = self.td[d](x)
 
             if (d >2) & (self.use_nnblock is True):
-                x = self.nnblock_list[d](x)
+                x = self.nnblock_down_list[d-3](x)
        
         x = self.conv_blocks_context[-1](x)
 
@@ -463,7 +468,7 @@ class Generic_UNet(SegmentationNetwork):
             x = self.conv_blocks_localization[u](x)
 
             if (u < 3) & (self.use_nnblock is True):
-                x = self.nnblock_list[5-u](x)
+                x = self.nnblock_up_list[2-u](x)
 
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 

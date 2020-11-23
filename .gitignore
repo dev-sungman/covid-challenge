@@ -1,5 +1,6 @@
 nnUNet_preprocessed/
 nnUNet_raw_data_base/
+nnUNet_trained_models/
 
 *.cpython-37.pyc
 *.pyc
