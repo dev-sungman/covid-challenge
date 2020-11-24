@@ -26,19 +26,20 @@ from nnunet.network_architecture.non_local import NONLocalBlock3D
 from nnunet.network_architecture.skip_attention import SkipAttentionBlock
 
 # Weight standardization Convolution
-class Conv2d(nn.Conv2d):
+class Conv3d(nn.Conv3d):
     def __init__(self, in_channels, output_channels, kernel_size, stride=1,
                     padding=0, dilation=1, groups=1, bias=True):
-        super(Conv2d, self).__init__(in_channels, output_channels, kernel_size, stride, padding,
+        super(Conv3d, self).__init__(in_channels, output_channels, kernel_size, stride, padding,
                                     dilation, groups, bias)
     
     def forward(self, x):
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, 
+                        keepdim=True).mean(dim=3, keepdim=True).mean(dim=4, keepdim=True)
         weight = weight - weight_mean
-        std = weight.view(weight.size(0), -1).std(dim=1).view(-1,1,1,1) + 1e-5
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1,1,1,1,1) + 1e-5
         weight = weight / std.expand_as(weight)
-        return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.conv3d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 class ConvDropoutNormNonlin(nn.Module):
     """
@@ -77,12 +78,9 @@ class ConvDropoutNormNonlin(nn.Module):
             self.dropout = None
         self.instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
         self.lrelu = self.nonlin(**self.nonlin_kwargs)
-        #self.nonlocal_block = NLBlockND(in_channels=output_channels, dimension=3)
-        
 
     def forward(self, x):
         x = self.conv(x)
-        #x = self.nonlocal_block(x)
         if self.dropout is not None:
             x = self.dropout(x)
         return self.lrelu(self.instnorm(x))
@@ -164,7 +162,7 @@ class StackedConvLayers(nn.Module):
 
 
 def print_module_training_status(module):
-    if isinstance(module, nn.Conv2d) or isinstance(module, nn.Conv3d) or isinstance(module, nn.Dropout3d) or \
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.Conv3d) or isinstance(module, Conv3d) or isinstance(module, nn.Dropout3d) or \
             isinstance(module, nn.Dropout2d) or isinstance(module, nn.Dropout) or isinstance(module, nn.InstanceNorm3d) \
             or isinstance(module, nn.InstanceNorm2d) or isinstance(module, nn.InstanceNorm1d) \
             or isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm3d) or isinstance(module,
@@ -247,7 +245,7 @@ class Generic_UNet(SegmentationNetwork):
         if use_ws is False:
             self.conv_op = conv_op
         else:
-            self.conv_op = Conv2d
+            self.conv_op = Conv3d
         self.norm_op = norm_op
         self.dropout_op = dropout_op
         self.num_classes = num_classes
@@ -265,7 +263,7 @@ class Generic_UNet(SegmentationNetwork):
                 pool_op_kernel_sizes = [(2, 2)] * num_pool
             if conv_kernel_sizes is None:
                 conv_kernel_sizes = [(3, 3)] * (num_pool + 1)
-        elif conv_op == nn.Conv3d:
+        elif (conv_op == nn.Conv3d) | (self.conv_op == Conv3d):
             upsample_mode = 'trilinear'
             pool_op = nn.MaxPool3d
             transpconv = nn.ConvTranspose3d
@@ -285,7 +283,7 @@ class Generic_UNet(SegmentationNetwork):
             self.conv_pad_sizes.append([1 if i == 3 else 0 for i in krnl])
 
         if max_num_features is None:
-            if self.conv_op == nn.Conv3d:
+            if (self.conv_op == nn.Conv3d) | (self.conv_op == Conv3d):
                 self.max_num_features = self.MAX_NUM_FILTERS_3D
             else:
                 self.max_num_features = self.MAX_FILTERS_2D
@@ -425,19 +423,24 @@ class Generic_UNet(SegmentationNetwork):
             # self.apply(print_module_training_status)
         
         if self.use_nnblock is True:
-            self.nnblock_32 = NONLocalBlock3D(32, sub_sample=True, bn_layer=False)
-            self.nnblock_64 = NONLocalBlock3D(64, sub_sample=True, bn_layer=False)
-            self.nnblock_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
-            self.nnblock_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-            self.nnblock_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_down_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            self.nnblock_down_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+            self.nnblock_down_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            
+            self.nnblock_up_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            self.nnblock_up_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
+            self.nnblock_up_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
 
-            self.nnblock_list = [
-                self.nnblock_32,
-                self.nnblock_64,
-                self.nnblock_128,
-                self.nnblock_256,
-                self.nnblock_320,
-                self.nnblock_320,
+            self.nnblock_down_list = [
+                self.nnblock_down_256,
+                self.nnblock_down_320,
+                self.nnblock_down_320
+            ]
+            
+            self.nnblock_up_list = [
+                self.nnblock_up_256,
+                self.nnblock_up_320,
+                self.nnblock_up_320
             ]
 
     def forward(self, x):
@@ -450,7 +453,7 @@ class Generic_UNet(SegmentationNetwork):
                 x = self.td[d](x)
 
             if (d >2) & (self.use_nnblock is True):
-                x = self.nnblock_list[d](x)
+                x = self.nnblock_down_list[d-3](x)
        
         x = self.conv_blocks_context[-1](x)
 
@@ -465,7 +468,7 @@ class Generic_UNet(SegmentationNetwork):
             x = self.conv_blocks_localization[u](x)
 
             if (u < 3) & (self.use_nnblock is True):
-                x = self.nnblock_list[5-u](x)
+                x = self.nnblock_up_list[2-u](x)
 
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
