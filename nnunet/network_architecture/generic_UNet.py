@@ -24,6 +24,7 @@ import torch.nn.functional as F
 
 from nnunet.network_architecture.non_local import NONLocalBlock3D
 from nnunet.network_architecture.skip_attention import SkipAttentionBlock
+from nnunet.network_architecture.seblock import SEBlock
 
 # Weight standardization Convolution
 class Conv3d(nn.Conv3d):
@@ -214,7 +215,9 @@ class Generic_UNet(SegmentationNetwork):
                  seg_output_use_bias=False,
                  use_nnblock=False, 
                  use_ws=False,
-                 use_skip_attention=False):
+                 use_skip_attention=False,
+                 use_upseblock=False,
+                 use_downseblock=False):
         """
         basically more flexible than v1, architecture is the same
 
@@ -252,8 +255,12 @@ class Generic_UNet(SegmentationNetwork):
         self.final_nonlin = final_nonlin
         self._deep_supervision = deep_supervision
         self.do_ds = deep_supervision
+
+        # when new arguments are added, they also must be set in init_args of nnUNetTrainer.
         self.use_nnblock = use_nnblock
         self.use_skip_attention = use_skip_attention
+        self.use_upseblock = use_upseblock
+        self.use_downseblock = use_downseblock
 
         if conv_op == nn.Conv2d:
             upsample_mode = 'bilinear'
@@ -302,6 +309,12 @@ class Generic_UNet(SegmentationNetwork):
         if self.use_skip_attention:
             self.skip_attentions = []
 
+        if self.use_upseblock:
+            self.upseblocks = []
+        
+        if self.use_downseblock:
+            self.downseblocks = []
+
         for d in range(num_pool):
             # determine the first stride
             if d != 0 and self.convolutional_pooling:
@@ -321,9 +334,26 @@ class Generic_UNet(SegmentationNetwork):
                 self.td.append(pool_op(pool_op_kernel_sizes[d]))
 
             if self.use_skip_attention:
-                sab = SkipAttentionBlock(output_features, output_features, output_features//2)
-                sab = sab.cuda()
-                self.skip_attentions.append(sab)
+                sab_name = f'self.skip_attention_{output_features}'
+                if sab_name.split('.')[1] in self.__dir__():
+                    cnt = 1
+                    while str(sab_name + f'_{cnt}').split('.')[1] in self.__dir__():
+                        cnt += 1
+                    sab_name += f'_{cnt}'
+
+                exec((f'{sab_name} = SkipAttentionBlock(output_features, output_features, output_features//2)'))
+                self.skip_attentions.append(eval(f'{sab_name}'))
+
+            if self.use_upseblock:
+                seb_name = f'self.se_block_{output_features}'
+                if seb_name.split('.')[1] in self.__dir__():
+                    cnt = 1
+                    while str(seb_name + f'_{cnt}').split('.')[1] in self.__dir__():
+                        cnt += 1
+                    seb_name += f'_{cnt}'
+                
+                exec((f'{seb_name} = SEBlock(output_features)'))
+                self.upseblocks.append(eval(f'{seb_name}'))
 
             input_features = output_features
             output_features = int(np.round(output_features * feat_map_mul_on_downscale))
@@ -392,6 +422,17 @@ class Generic_UNet(SegmentationNetwork):
                                   self.nonlin, self.nonlin_kwargs, basic_block=basic_block)
             ))
 
+            if self.use_downseblock:
+                seb_name = f'self.se_block_{final_num_features}'
+                if seb_name.split('.')[1] in self.__dir__():
+                    cnt = 1
+                    while str(seb_name + f'_{cnt}').split('.')[1] in self.__dir__():
+                        cnt += 1
+                    seb_name += f'_{cnt}'
+                
+                exec((f'{seb_name} = SEBlock(final_num_features)'))
+                self.downseblocks.append(eval(f'{seb_name}'))
+
         for ds in range(len(self.conv_blocks_localization)):
             self.seg_outputs.append(conv_op(self.conv_blocks_localization[ds][-1].output_channels, num_classes,
                                             1, 1, 0, 1, 1, seg_output_use_bias))
@@ -414,6 +455,18 @@ class Generic_UNet(SegmentationNetwork):
         self.td = nn.ModuleList(self.td)
         self.tu = nn.ModuleList(self.tu)
         self.seg_outputs = nn.ModuleList(self.seg_outputs)
+
+        # register all custom modules properly
+        if self.use_skip_attention:
+            self.skip_attentions = nn.ModuleList(self.skip_attentions)
+
+        if self.use_upseblock:
+            self.upseblocks = nn.ModuleList(self.upseblocks)
+
+        if self.use_downseblock:
+            self.downseblocks = nn.ModuleList(self.downseblocks)
+
+
         if self.upscale_logits:
             self.upscale_logits_ops = nn.ModuleList(
                 self.upscale_logits_ops)  # lambda x:x is not a Module so we need to distinguish here
@@ -450,6 +503,9 @@ class Generic_UNet(SegmentationNetwork):
         seg_outputs = []
         for d in range(len(self.conv_blocks_context) - 1):
             x = self.conv_blocks_context[d](x)
+            if self.use_upseblock:
+                x = self.upseblocks[d](x)
+
             skips.append(x)
             if not self.convolutional_pooling:
                 x = self.td[d](x)
@@ -468,6 +524,8 @@ class Generic_UNet(SegmentationNetwork):
 
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
+            if self.use_downseblock:
+                x = self.downseblocks[u](x)
 
             if (u < 3) & (self.use_nnblock is True):
                 x = self.nnblock_up_list[2-u](x)
