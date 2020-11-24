@@ -423,24 +423,26 @@ class Generic_UNet(SegmentationNetwork):
             # self.apply(print_module_training_status)
         
         if self.use_nnblock is True:
-            self.nnblock_down_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            # self.nnblock_down_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
             self.nnblock_down_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-            self.nnblock_down_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_down_320_1 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_down_320_2 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
             
-            self.nnblock_up_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
+            # self.nnblock_up_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
             self.nnblock_up_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-            self.nnblock_up_320 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_up_320_1 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
+            self.nnblock_up_320_2 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
 
             self.nnblock_down_list = [
                 self.nnblock_down_256,
-                self.nnblock_down_320,
-                self.nnblock_down_320
+                self.nnblock_down_320_1,
+                self.nnblock_down_320_2
             ]
             
             self.nnblock_up_list = [
                 self.nnblock_up_256,
-                self.nnblock_up_320,
-                self.nnblock_up_320
+                self.nnblock_up_320_1,
+                self.nnblock_up_320_2
             ]
 
     def forward(self, x):
