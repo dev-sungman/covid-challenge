@@ -42,9 +42,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
     """
 
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
-                 unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False):
+                 unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False,
+                 use_upseblock=False, use_downseblock=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
-                         deterministic, fp16, use_nnblock, use_ws, use_skip_attention)
+                         deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock)
         self.max_num_epochs = 1000
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
@@ -55,6 +56,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
         self.use_nnblock = use_nnblock
         self.use_ws = use_ws
         self.use_skip_attention = use_skip_attention
+        self.use_upseblock = use_upseblock
+        self.use_downseblock = use_downseblock
 
     def initialize(self, training=True, force_load_plans=False):
         """
@@ -160,7 +163,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     dropout_op_kwargs,
                                     net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True, 
-                                    use_nnblock=self.use_nnblock, use_ws=self.use_ws, use_skip_attention=self.use_skip_attention)
+                                    use_nnblock=self.use_nnblock, use_ws=self.use_ws, use_skip_attention=self.use_skip_attention,
+                                    use_upseblock=self.use_upseblock, use_downseblock=self.use_downseblock)
         if torch.cuda.is_available():
             self.network.cuda()
         self.network.inference_apply_nonlin = softmax_helper

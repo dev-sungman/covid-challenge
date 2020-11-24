@@ -30,6 +30,7 @@ def main():
     parser.add_argument("network_trainer") # nnUNetTrainerV2
     parser.add_argument("task", help="can be task name or task id")
     parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+    parser.add_argument("name", help="folder name for saving")
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -69,6 +70,8 @@ def main():
     parser.add_argument("--use_ws", required=False, default=False, action="store_true", 
                     help="If you want to use Weight Standardization please set this argument true")
     parser.add_argument("--use_skip_attention", required=False, default=False, action="store_true")
+    parser.add_argument("--use_upseblock", required=False, default=False, action="store_true")
+    parser.add_argument("--use_downseblock", required=False, default=False, action="store_true")
 
     # parser.add_argument("--interp_order", required=False, default=3, type=int,
     #                     help="order of interpolation for segmentations. Testing purpose only. Hands off")
@@ -82,6 +85,7 @@ def main():
 
     task = args.task
     fold = args.fold
+    name = args.name
     network = args.network
     network_trainer = args.network_trainer
     validation_only = args.validation_only
@@ -121,7 +125,7 @@ def main():
     #     raise ValueError("force_separate_z must be None, True or False. Given: %s" % force_separate_z)
 
     plans_file, output_folder_name, dataset_directory, batch_dice, stage, \
-        trainer_class = get_default_configuration(network, task, network_trainer, plans_identifier)
+        trainer_class = get_default_configuration(network, task, name, network_trainer, plans_identifier)
 
     if trainer_class is None:
         raise RuntimeError("Could not find trainer class in nnunet.training.network_training")
@@ -141,7 +145,9 @@ def main():
                             fp16=run_mixed_precision, 
                             use_nnblock=args.use_nnblock, 
                             use_ws=args.use_ws,
-                            use_skip_attention=args.use_skip_attention)
+                            use_skip_attention=args.use_skip_attention,
+                            use_upseblock=args.use_upseblock,
+                            use_downseblock=args.use_downseblock)
 
     if args.disable_saving:
         trainer.save_latest_only = False  # if false it will not store/overwrite _latest but separate files each
