@@ -70,7 +70,7 @@ class ConvDropoutNormNonlin(nn.Module):
         self.conv_kwargs = conv_kwargs
         self.conv_op = conv_op
         self.norm_op = norm_op
-
+        
         self.conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs)
         if self.dropout_op is not None and self.dropout_op_kwargs['p'] is not None and self.dropout_op_kwargs[
             'p'] > 0:
@@ -95,12 +95,82 @@ class ConvDropoutNonlinNorm(ConvDropoutNormNonlin):
         return self.instnorm(self.lrelu(x))
 
 
+class ConvDropoutNormNonlinSEBlock(nn.Module):
+    def __init__(self, input_channels, output_channels,
+                 conv_op=nn.Conv2d, conv_kwargs=None, conv_kwargs_first_conv=None,
+                 norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
+                 dropout_op=nn.Dropout2d, dropout_op_kwargs=None,
+                 nonlin=nn.LeakyReLU, nonlin_kwargs=None,
+                 num_convs=2, basic_block=ConvDropoutNormNonlin):
+        super(ConvDropoutNormNonlinSEBlock, self).__init__()
+        if nonlin_kwargs is None:
+            nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
+        if dropout_op_kwargs is None:
+            dropout_op_kwargs = {'p': 0.5, 'inplace': True}
+        if norm_op_kwargs is None:
+            norm_op_kwargs = {'eps': 1e-5, 'affine': True, 'momentum': 0.1}
+        if conv_kwargs is None:
+            conv_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 1, 'dilation': 1, 'bias': True}
+        if conv_kwargs_first_conv is None:
+            conv_kwargs_first_conv = {'kernel_size': 3, 'stride': 1, 'padding': 1, 'dilation': 1, 'bias': True}
+        
+        if num_convs - 2 > 0:
+            self.pre_blocks = nn.Sequential(
+                    *([basic_block(input_channels, output_channels, conv_op,
+                        conv_kwargs_first_conv, norm_op, norm_op_kwargs, dropout_op, 
+                        dropout_op_kwargs, nonlin, nonlin_kwargs)] +
+                      [basic_block(output_channels, output_channels, conv_op,
+                        conv_kwargs, norm_op, norm_op_kwargs, dropout_op, 
+                        dropout_op_kwargs, nonlin, nonlin_kwargs) for _ in range(num_convs - 2)]))
+            input_channels = output_channels
+        else:
+            self.pre_blocks = None
+
+        self.nonlin_kwargs = nonlin_kwargs
+        self.nonlin = nonlin
+        self.dropout_op = dropout_op
+        self.dropout_op_kwargs = dropout_op_kwargs
+        self.norm_op_kwargs = norm_op_kwargs
+        self.conv_kwargs = conv_kwargs
+        self.conv_kwargs_first_conv = conv_kwargs_first_conv
+        self.conv_op = conv_op
+        self.norm_op = norm_op
+
+        self.conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs)
+        if self.dropout_op is not None and self.dropout_op_kwargs['p'] is not None and self.dropout_op_kwargs[
+            'p'] > 0:
+            self.dropout = self.dropout_op(**self.dropout_op_kwargs)
+        else:
+            self.dropout = None
+        self.instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
+        self.lrelu = self.nonlin(**self.nonlin_kwargs)
+
+        self.seblock = SEBlock(output_channels)
+        self.shortcut_conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs_first_conv)
+        self.shortcut_instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
+
+    def forward(self, x):
+        shortcut = x
+        if self.pre_blocks is not None:
+            x = self.pre_blocks(x)
+        x = self.conv(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
+        x = self.instnorm(x)
+        x = self.seblock(x)
+
+        shortcut = self.shortcut_instnorm(self.shortcut_conv(shortcut))
+        x += shortcut
+        return self.lrelu(x)
+
+
 class StackedConvLayers(nn.Module):
     def __init__(self, input_feature_channels, output_feature_channels, num_convs,
                  conv_op=nn.Conv2d, conv_kwargs=None,
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout2d, dropout_op_kwargs=None,
-                 nonlin=nn.LeakyReLU, nonlin_kwargs=None, first_stride=None, basic_block=ConvDropoutNormNonlin):
+                 nonlin=nn.LeakyReLU, nonlin_kwargs=None, first_stride=None, basic_block=ConvDropoutNormNonlin,
+                 use_seblock=False):
         '''
         stacks ConvDropoutNormLReLU layers. initial_stride will only be applied to first layer in the stack. The other parameters affect all layers
         :param input_feature_channels:
@@ -147,16 +217,22 @@ class StackedConvLayers(nn.Module):
             self.conv_kwargs_first_conv = conv_kwargs
 
         super(StackedConvLayers, self).__init__()
-        self.blocks = nn.Sequential(
-            *([basic_block(input_feature_channels, output_feature_channels, self.conv_op,
-                           self.conv_kwargs_first_conv,
-                           self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
-                           self.nonlin, self.nonlin_kwargs)] +
-              [basic_block(output_feature_channels, output_feature_channels, self.conv_op,
-                           self.conv_kwargs,
-                           self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
-                           self.nonlin, self.nonlin_kwargs) for _ in range(num_convs - 1)])
-                           )
+        if use_seblock:
+            self.blocks = ConvDropoutNormNonlinSEBlock(input_feature_channels, output_feature_channels, 
+                            self.conv_op, self.conv_kwargs, self.conv_kwargs_first_conv, self.norm_op, 
+                            self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs,
+                            num_convs)
+        else:
+            self.blocks = nn.Sequential(
+                *([basic_block(input_feature_channels, output_feature_channels, 
+                            self.conv_op, self.conv_kwargs_first_conv,
+                            self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                            self.nonlin, self.nonlin_kwargs)] +
+                  [basic_block(output_feature_channels, output_feature_channels, self.conv_op,
+                            self.conv_kwargs,
+                            self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                            self.nonlin, self.nonlin_kwargs) for _ in range(num_convs - 1)])
+                            )
 
     def forward(self, x):
         return self.blocks(x)
@@ -216,8 +292,8 @@ class Generic_UNet(SegmentationNetwork):
                  use_nnblock=False, 
                  use_ws=False,
                  use_skip_attention=False,
-                 use_upseblock=False,
-                 use_downseblock=False):
+                 use_downseblock=False,
+                 use_upseblock=False):
         """
         basically more flexible than v1, architecture is the same
 
@@ -259,8 +335,8 @@ class Generic_UNet(SegmentationNetwork):
         # when new arguments are added, they also must be set in init_args of nnUNetTrainer.
         self.use_nnblock = use_nnblock
         self.use_skip_attention = use_skip_attention
-        self.use_upseblock = use_upseblock
         self.use_downseblock = use_downseblock
+        self.use_upseblock = use_upseblock
 
         if conv_op == nn.Conv2d:
             upsample_mode = 'bilinear'
@@ -309,12 +385,6 @@ class Generic_UNet(SegmentationNetwork):
         if self.use_skip_attention:
             self.skip_attentions = []
 
-        if self.use_upseblock:
-            self.upseblocks = []
-        
-        if self.use_downseblock:
-            self.downseblocks = []
-
         for d in range(num_pool):
             # determine the first stride
             if d != 0 and self.convolutional_pooling:
@@ -329,31 +399,12 @@ class Generic_UNet(SegmentationNetwork):
                                                               self.conv_op, self.conv_kwargs, self.norm_op,
                                                               self.norm_op_kwargs, self.dropout_op,
                                                               self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs,
-                                                              first_stride, basic_block=basic_block))
+                                                              first_stride, basic_block=basic_block, use_seblock=self.use_downseblock))
             if not self.convolutional_pooling:
                 self.td.append(pool_op(pool_op_kernel_sizes[d]))
 
             if self.use_skip_attention:
-                sab_name = f'self.skip_attention_{output_features}'
-                if sab_name.split('.')[1] in self.__dir__():
-                    cnt = 1
-                    while str(sab_name + f'_{cnt}').split('.')[1] in self.__dir__():
-                        cnt += 1
-                    sab_name += f'_{cnt}'
-
-                exec((f'{sab_name} = SkipAttentionBlock(output_features, output_features, output_features//2)'))
-                self.skip_attentions.append(eval(f'{sab_name}'))
-
-            if self.use_upseblock:
-                seb_name = f'self.se_block_{output_features}'
-                if seb_name.split('.')[1] in self.__dir__():
-                    cnt = 1
-                    while str(seb_name + f'_{cnt}').split('.')[1] in self.__dir__():
-                        cnt += 1
-                    seb_name += f'_{cnt}'
-                
-                exec((f'{seb_name} = SEBlock(output_features)'))
-                self.upseblocks.append(eval(f'{seb_name}'))
+                self.skip_attentions.append(SkipAttentionBlock(output_features, output_features, output_features//2))
 
             input_features = output_features
             output_features = int(np.round(output_features * feat_map_mul_on_downscale))
@@ -377,13 +428,20 @@ class Generic_UNet(SegmentationNetwork):
 
         self.conv_kwargs['kernel_size'] = self.conv_kernel_sizes[num_pool]
         self.conv_kwargs['padding'] = self.conv_pad_sizes[num_pool]
-        self.conv_blocks_context.append(nn.Sequential(
-            StackedConvLayers(input_features, output_features, num_conv_per_stage - 1, self.conv_op, self.conv_kwargs,
-                              self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs, self.nonlin,
-                              self.nonlin_kwargs, first_stride, basic_block=basic_block),
-            StackedConvLayers(output_features, final_num_features, 1, self.conv_op, self.conv_kwargs,
-                              self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs, self.nonlin,
-                              self.nonlin_kwargs, basic_block=basic_block)))
+        if self.use_downseblock:
+            self.conv_blocks_context.append(StackedConvLayers(input_features, output_features, num_conv_per_stage,
+                                                              self.conv_op, self.conv_kwargs, self.norm_op,
+                                                              self.norm_op_kwargs, self.dropout_op,
+                                                              self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs,
+                                                              first_stride, basic_block=basic_block, use_seblock=True))
+        else:
+            self.conv_blocks_context.append(nn.Sequential(
+                StackedConvLayers(input_features, output_features, num_conv_per_stage - 1, self.conv_op, self.conv_kwargs,
+                                self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs, self.nonlin,
+                                self.nonlin_kwargs, first_stride, basic_block=basic_block),
+                StackedConvLayers(output_features, final_num_features, 1, self.conv_op, self.conv_kwargs,
+                                self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs, self.nonlin,
+                                self.nonlin_kwargs, basic_block=basic_block)))
 
         # if we don't want to do dropout in the localization pathway then we set the dropout prob to zero here
         if not dropout_in_localization:
@@ -413,25 +471,24 @@ class Generic_UNet(SegmentationNetwork):
 
             self.conv_kwargs['kernel_size'] = self.conv_kernel_sizes[- (u + 1)]
             self.conv_kwargs['padding'] = self.conv_pad_sizes[- (u + 1)]
-            self.conv_blocks_localization.append(nn.Sequential(
-                StackedConvLayers(n_features_after_tu_and_concat, nfeatures_from_skip, num_conv_per_stage - 1,
-                                  self.conv_op, self.conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op,
-                                  self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs, basic_block=basic_block),
-                StackedConvLayers(nfeatures_from_skip, final_num_features, 1, self.conv_op, self.conv_kwargs,
-                                  self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
-                                  self.nonlin, self.nonlin_kwargs, basic_block=basic_block)
-            ))
-
-            if self.use_downseblock:
-                seb_name = f'self.se_block_{final_num_features}'
-                if seb_name.split('.')[1] in self.__dir__():
-                    cnt = 1
-                    while str(seb_name + f'_{cnt}').split('.')[1] in self.__dir__():
-                        cnt += 1
-                    seb_name += f'_{cnt}'
-                
-                exec((f'{seb_name} = SEBlock(final_num_features)'))
-                self.downseblocks.append(eval(f'{seb_name}'))
+            if self.use_upseblock:
+                self.conv_blocks_localization.append(nn.Sequential(
+                    StackedConvLayers(n_features_after_tu_and_concat, nfeatures_from_skip, 1,
+                                    self.conv_op, self.conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op,
+                                    self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs, basic_block=basic_block),
+                    StackedConvLayers(nfeatures_from_skip, final_num_features, num_conv_per_stage - 1, self.conv_op, self.conv_kwargs,
+                                    self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                                    self.nonlin, self.nonlin_kwargs, basic_block=basic_block, use_seblock=True)
+                ))
+            else:
+                self.conv_blocks_localization.append(nn.Sequential(
+                    StackedConvLayers(n_features_after_tu_and_concat, nfeatures_from_skip, num_conv_per_stage - 1,
+                                    self.conv_op, self.conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op,
+                                    self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs, basic_block=basic_block),
+                    StackedConvLayers(nfeatures_from_skip, final_num_features, 1, self.conv_op, self.conv_kwargs,
+                                    self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                                    self.nonlin, self.nonlin_kwargs, basic_block=basic_block)
+                ))
 
         for ds in range(len(self.conv_blocks_localization)):
             self.seg_outputs.append(conv_op(self.conv_blocks_localization[ds][-1].output_channels, num_classes,
@@ -459,12 +516,6 @@ class Generic_UNet(SegmentationNetwork):
         # register all custom modules properly
         if self.use_skip_attention:
             self.skip_attentions = nn.ModuleList(self.skip_attentions)
-
-        if self.use_upseblock:
-            self.upseblocks = nn.ModuleList(self.upseblocks)
-
-        if self.use_downseblock:
-            self.downseblocks = nn.ModuleList(self.downseblocks)
 
 
         if self.upscale_logits:
@@ -503,9 +554,6 @@ class Generic_UNet(SegmentationNetwork):
         seg_outputs = []
         for d in range(len(self.conv_blocks_context) - 1):
             x = self.conv_blocks_context[d](x)
-            if self.use_upseblock:
-                x = self.upseblocks[d](x)
-
             skips.append(x)
             if not self.convolutional_pooling:
                 x = self.td[d](x)
@@ -524,8 +572,6 @@ class Generic_UNet(SegmentationNetwork):
 
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
-            if self.use_downseblock:
-                x = self.downseblocks[u](x)
 
             if (u < 3) & (self.use_nnblock is True):
                 x = self.nnblock_up_list[2-u](x)

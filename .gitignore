@@ -1,6 +1,7 @@
 nnUNet_preprocessed/
 nnUNet_raw_data_base/
 nnUNet_trained_models/
+result/
 
 *.cpython-37.pyc
 *.pyc
@@ -9,3 +10,5 @@ nnUNet_trained_models/
 *.pkl
 *.jpg
 *.png
+*.sh
+*.ts
