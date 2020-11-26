@@ -23,7 +23,23 @@ from scipy.ndimage.filters import gaussian_filter
 from typing import Union, Tuple, List
 
 from torch.cuda.amp import autocast
+import torch.nn.functional as F
 
+# Weight standardization Convolution
+class Conv3d(nn.Conv3d):
+    def __init__(self, in_channels, output_channels, kernel_size, stride=1,
+                    padding=0, dilation=1, groups=1, bias=True):
+        super(Conv3d, self).__init__(in_channels, output_channels, kernel_size, stride, padding,
+                                    dilation, groups, bias)
+    
+    def forward(self, x):
+        weight = self.weight
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, 
+                        keepdim=True).mean(dim=3, keepdim=True).mean(dim=4, keepdim=True)
+        weight = weight - weight_mean
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1,1,1,1,1) + 1e-5
+        weight = weight / std.expand_as(weight)
+        return F.conv3d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 class NeuralNetwork(nn.Module):
     def __init__(self):
@@ -140,7 +156,7 @@ class SegmentationNetwork(NeuralNetwork):
 
         with context():
             with torch.no_grad():
-                if self.conv_op == nn.Conv3d:
+                if ((self.conv_op == nn.Conv3d) | (self.conv_op == Conv3d)):
                     if use_sliding_window:
                         res = self._internal_predict_3D_3Dconv_tiled(x, step_size, do_mirroring, mirror_axes, patch_size,
                                                                      regions_class_order, use_gaussian, pad_border_mode,

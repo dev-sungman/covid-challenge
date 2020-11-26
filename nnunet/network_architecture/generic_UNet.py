@@ -25,22 +25,7 @@ import torch.nn.functional as F
 from nnunet.network_architecture.non_local import NONLocalBlock3D
 from nnunet.network_architecture.skip_attention import SkipAttentionBlock
 from nnunet.network_architecture.seblock import SEBlock
-
-# Weight standardization Convolution
-class Conv3d(nn.Conv3d):
-    def __init__(self, in_channels, output_channels, kernel_size, stride=1,
-                    padding=0, dilation=1, groups=1, bias=True):
-        super(Conv3d, self).__init__(in_channels, output_channels, kernel_size, stride, padding,
-                                    dilation, groups, bias)
-    
-    def forward(self, x):
-        weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, 
-                        keepdim=True).mean(dim=3, keepdim=True).mean(dim=4, keepdim=True)
-        weight = weight - weight_mean
-        std = weight.view(weight.size(0), -1).std(dim=1).view(-1,1,1,1,1) + 1e-5
-        weight = weight / std.expand_as(weight)
-        return F.conv3d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+from nnunet.network_architecture.neural_network import Conv3d
 
 class ConvDropoutNormNonlin(nn.Module):
     """
