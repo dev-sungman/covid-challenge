@@ -53,6 +53,8 @@ def main():
     parser.add_argument('-p', '--plans_identifier', help='do not touch this unless you know what you are doing',
                         default=default_plans_identifier, required=False)
 
+    parser.add_argument("-n", "--name", help="folder name for saving", required=True)
+
     parser.add_argument('-f', '--folds', nargs='+', default='None',
                         help="folds to use for prediction. Default is None which means that folds will be detected "
                              "automatically in the model output folder")
@@ -210,7 +212,7 @@ def main():
         trainer = trainer_class_name
 
     model_folder_name = join(network_training_output_dir, model, task_name, trainer + "__" +
-                              args.plans_identifier)
+                              args.plans_identifier, args.name)
     print("using model stored in ", model_folder_name)
     assert isdir(model_folder_name), "model output folder not found. Expected: %s" % model_folder_name
 
