@@ -510,28 +510,15 @@ class Generic_UNet(SegmentationNetwork):
         if self.weightInitializer is not None:
             self.apply(self.weightInitializer)
             # self.apply(print_module_training_status)
-        
+
         if self.use_nnblock is True:
-            # self.nnblock_down_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
             self.nnblock_down_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
             self.nnblock_down_320_1 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
             self.nnblock_down_320_2 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
-            
-            # self.nnblock_up_128 = NONLocalBlock3D(128, sub_sample=True, bn_layer=False)
-            self.nnblock_up_256 = NONLocalBlock3D(256, sub_sample=True, bn_layer=False)
-            self.nnblock_up_320_1 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
-            self.nnblock_up_320_2 = NONLocalBlock3D(320, sub_sample=True, bn_layer=False)
-
             self.nnblock_down_list = [
                 self.nnblock_down_256,
                 self.nnblock_down_320_1,
                 self.nnblock_down_320_2
-            ]
-            
-            self.nnblock_up_list = [
-                self.nnblock_up_256,
-                self.nnblock_up_320_1,
-                self.nnblock_up_320_2
             ]
 
     def forward(self, x):
@@ -543,7 +530,7 @@ class Generic_UNet(SegmentationNetwork):
             if not self.convolutional_pooling:
                 x = self.td[d](x)
 
-            if (d >2) & (self.use_nnblock is True):
+            if (self.use_nnblock is True) & (d>2):
                 x = self.nnblock_down_list[d-3](x)
        
         x = self.conv_blocks_context[-1](x)
@@ -557,9 +544,6 @@ class Generic_UNet(SegmentationNetwork):
 
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
-
-            if (u < 3) & (self.use_nnblock is True):
-                x = self.nnblock_up_list[2-u](x)
 
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
