@@ -72,6 +72,7 @@ def main():
     parser.add_argument("--use_skip_attention", required=False, default=False, action="store_true")
     parser.add_argument("--use_upseblock", required=False, default=False, action="store_true")
     parser.add_argument("--use_downseblock", required=False, default=False, action="store_true")
+    parser.add_argument("--use_acm3d", required=False, default=False, action="store_true")
 
     # parser.add_argument("--interp_order", required=False, default=3, type=int,
     #                     help="order of interpolation for segmentations. Testing purpose only. Hands off")
@@ -147,7 +148,8 @@ def main():
                             use_ws=args.use_ws,
                             use_skip_attention=args.use_skip_attention,
                             use_upseblock=args.use_upseblock,
-                            use_downseblock=args.use_downseblock)
+                            use_downseblock=args.use_downseblock,
+                            use_acm3d=args.use_acm3d)
 
     if args.disable_saving:
         trainer.save_latest_only = False  # if false it will not store/overwrite _latest but separate files each

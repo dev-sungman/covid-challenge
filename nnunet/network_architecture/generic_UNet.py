@@ -26,6 +26,8 @@ from nnunet.network_architecture.non_local import NONLocalBlock3D
 from nnunet.network_architecture.skip_attention import SkipAttentionBlock
 from nnunet.network_architecture.seblock import SEBlock
 from nnunet.network_architecture.neural_network import Conv3d
+from nnunet.network_architecture.acm3d import ACM3D
+
 
 class ConvDropoutNormNonlin(nn.Module):
     """
@@ -278,7 +280,8 @@ class Generic_UNet(SegmentationNetwork):
                  use_ws=False,
                  use_skip_attention=False,
                  use_downseblock=False,
-                 use_upseblock=False):
+                 use_upseblock=False,
+                 use_acm3d=False):
         """
         basically more flexible than v1, architecture is the same
 
@@ -322,6 +325,7 @@ class Generic_UNet(SegmentationNetwork):
         self.use_skip_attention = use_skip_attention
         self.use_downseblock = use_downseblock
         self.use_upseblock = use_upseblock
+        self.use_acm3d = use_acm3d
 
         if conv_op == nn.Conv2d:
             upsample_mode = 'bilinear'
@@ -520,6 +524,16 @@ class Generic_UNet(SegmentationNetwork):
                 self.nnblock_down_320_1,
                 self.nnblock_down_320_2
             ]
+        
+        if self.use_acm3d is True:
+            self.acm3d_256 = ACM3D(num_heads=32, num_features=256)
+            self.acm3d_320_1 = ACM3D(num_heads=32, num_features=320)
+            self.acm3d_320_2 = ACM3D(num_heads=32, num_features=320)
+            self.acm3d_list = [
+                self.acm3d_256,
+                self.acm3d_320_1,
+                self.acm3d_320_2
+            ]
 
     def forward(self, x):
         skips = []
@@ -532,7 +546,10 @@ class Generic_UNet(SegmentationNetwork):
 
             if (self.use_nnblock is True) & (d>2):
                 x = self.nnblock_down_list[d-3](x)
-       
+            
+            if (self.use_acm3d is True) & (d>2):
+                x = self.acm3d_list[d-3](x)
+        
         x = self.conv_blocks_context[-1](x)
 
         for u in range(len(self.tu)):
