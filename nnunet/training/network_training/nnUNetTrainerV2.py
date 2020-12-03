@@ -42,11 +42,14 @@ class nnUNetTrainerV2(nnUNetTrainer):
     """
 
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
-                 unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False, use_upseblock=False, use_downseblock=False, use_acm3d=False):
+                 unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False, 
+                 use_upseblock=False, use_downseblock=False, use_acm3d=False, initial_lr=1e-2, lr_mode='poly'):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
-                         deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, use_acm3d)
+                         deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, 
+                         use_acm3d, initial_lr, lr_mode)
         self.max_num_epochs = 1000
-        self.initial_lr = 1e-2
+        self.initial_lr = initial_lr
+        self.lr_mode = lr_mode
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
 
@@ -395,7 +398,12 @@ class nnUNetTrainerV2(nnUNetTrainer):
             ep = self.epoch + 1
         else:
             ep = epoch
-        self.optimizer.param_groups[0]['lr'] = poly_lr(ep, self.max_num_epochs, self.initial_lr, 0.9)
+
+        if self.lr_mode == 'constant':
+            self.optimizer.param_groups[0]['lr'] = self.initial_lr
+        elif self.lr_mode == 'poly':
+            self.optimizer.param_groups[0]['lr'] = poly_lr(ep, self.max_num_epochs, self.initial_lr, 0.9)
+            
         self.print_to_log_file("lr:", np.round(self.optimizer.param_groups[0]['lr'], decimals=6))
 
     def on_epoch_end(self):

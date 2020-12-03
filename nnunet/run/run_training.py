@@ -66,6 +66,8 @@ def main():
                         help="If set nnU-Net will not save any parameter files. Useful for development when you are "
                              "only interested in the results and want to save some disk space")
 
+    parser.add_argument("--initial_lr", type=float, default=1e-2)
+    parser.add_argument("--lr_mode", type=str, default='poly', choices=['constant', 'poly'])
     parser.add_argument("--use_nnblock", required=False, default=False, action="store_true")
     parser.add_argument("--use_ws", required=False, default=False, action="store_true", 
                     help="If you want to use Weight Standardization please set this argument true")
@@ -149,7 +151,9 @@ def main():
                             use_skip_attention=args.use_skip_attention,
                             use_upseblock=args.use_upseblock,
                             use_downseblock=args.use_downseblock,
-                            use_acm3d=args.use_acm3d)
+                            use_acm3d=args.use_acm3d,
+                            initial_lr=args.initial_lr,
+                            lr_mode=args.lr_mode)
 
     if args.disable_saving:
         trainer.save_latest_only = False  # if false it will not store/overwrite _latest but separate files each
