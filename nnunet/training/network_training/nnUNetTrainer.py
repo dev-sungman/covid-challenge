@@ -48,7 +48,7 @@ matplotlib.use("agg")
 class nnUNetTrainer(NetworkTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
                  unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False,
-                 use_upseblock=False, use_downseblock=False, use_acm3d=False):
+                 use_upseblock=False, use_downseblock=False, use_acm3d=False, initial_lr=1e-2, lr_mode='poly'):
         """
         :param deterministic:
         :param fold: can be either [0 ... 5) for cross-validation, 'all' to train on all available training data or
@@ -77,7 +77,8 @@ class nnUNetTrainer(NetworkTrainer):
         self.unpack_data = unpack_data
         # when new arguments are added, they also must be set in init_args.
         self.init_args = (plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
-                          deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, use_acm3d)
+                          deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, 
+                          use_acm3d, initial_lr, lr_mode)
         # set through arguments from init
         self.stage = stage
         self.experiment_name = self.__class__.__name__
@@ -125,7 +126,7 @@ class nnUNetTrainer(NetworkTrainer):
 
         self.lr_scheduler_eps = 1e-3
         self.lr_scheduler_patience = 30
-        self.initial_lr = 3e-4
+        self.initial_lr = initial_lr
         self.weight_decay = 3e-5
 
         self.oversample_foreground_percent = 0.33
