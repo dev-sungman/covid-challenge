@@ -35,7 +35,7 @@ source ./environment_setup.sh
 * --use_nnblock: if you want to use 3D nnblock, please use this argument
 * --use_ws : if you want to use weight standardization, please use this argument
 * --use_skip_attention : if you want to use skip attention, please use this argument
-* -w $path_to_pretrainedWeight : load pretrained weight by Model genesis
+* -w $path_to_pretrainedWeight : load pretrained weight by Model genesis (LUNA : https://drive.google.com/drive/folders/1ZEQHc4FLFHK204UJ1iABQVrjQOFmx_gX?usp=sharing)
 
 
 ```bash
