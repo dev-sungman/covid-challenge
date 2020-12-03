@@ -84,8 +84,15 @@ def main():
     # parser.add_argument("--force_separate_z", required=False, default="None", type=str,
     #                     help="force_separate_z resampling. Can be None, True or False. Testing purpose only. Hands off")
 
+    # Add an argument for pre-trained weights
+    parser.add_argument("-w", required=False, default=None, help="Load pre-trained Models Genesis") 
+    
+    
     args = parser.parse_args()
-
+    
+    # Parse it to variable "weights"
+    weights = args.w 
+    
     task = args.task
     fold = args.fold
     name = args.name
@@ -163,6 +170,9 @@ def main():
 
     trainer.initialize(not validation_only)
 
+    if weights != None:                                                         
+        trainer.load_pretrained_weights(weights)
+        
     if find_lr:
         trainer.find_lr()
     else:
