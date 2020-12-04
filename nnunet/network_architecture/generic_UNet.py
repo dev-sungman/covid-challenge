@@ -393,7 +393,9 @@ class Generic_UNet(SegmentationNetwork):
                 self.td.append(pool_op(pool_op_kernel_sizes[d]))
 
             if self.use_skip_attention:
-                self.skip_attentions.append(SkipAttentionBlock(output_features, output_features, output_features//2))
+                sab = SkipAttentionBlock(output_features, output_features, output_features//2)
+                sab = sab.cuda()
+                self.skip_attentions.append(sab)
 
             input_features = output_features
             output_features = int(np.round(output_features * feat_map_mul_on_downscale))
