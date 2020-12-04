@@ -73,10 +73,10 @@ CUDA_VISIBLE_DEVICES=1 python nnunet/inference/predict_simple.py -i nnUNet_raw_d
 
 ### Convert Data (for submission)
 
-If you finished the inference, you can check a new folder named $output_path
+If you finished the inference, you can check a new folder named $output_path and $folder_name.
 
 ```bash
-python convert_testformat.py --data_path='$output_path'
+python convert_testformat.py --data_path='$output_path' --save_path '$folder_name'
 ```
 
 
