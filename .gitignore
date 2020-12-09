@@ -2,6 +2,9 @@ nnUNet_preprocessed/
 nnUNet_raw_data_base/
 nnUNet_trained_models/
 result/
+COVID-19-20_TestSet/
+SampleSubmissionTest/
+
 
 *.cpython-37.pyc
 *.pyc

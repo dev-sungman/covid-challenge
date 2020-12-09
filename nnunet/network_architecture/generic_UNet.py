@@ -558,7 +558,7 @@ class Generic_UNet(SegmentationNetwork):
                 skip = self.skip_attentions[-(u + 1)](x, skips[-(u + 1)])
             else:
                 skip = skips[-(u + 1)]
-
+            
             x = torch.cat((x, skip), dim=1)
             x = self.conv_blocks_localization[u](x)
 
