@@ -540,8 +540,6 @@ def check_input_folder_and_return_caseIDs(input_folder, expected_num_modalities)
 
     maybe_case_ids = np.unique([i[:-12] for i in files])
 
-    result_case = np.unique(files)
-    '''
     remaining = deepcopy(files)
     missing = []
 
@@ -568,8 +566,8 @@ def check_input_folder_and_return_caseIDs(input_folder, expected_num_modalities)
         print("Some files are missing:")
         print(missing)
         raise RuntimeError("missing files in input_folder")
-    '''
-    return result_case
+    
+    return maybe_case_ids
 
 
 def predict_from_folder(model: str, input_folder: str, output_folder: str, folds: Union[Tuple[int], List[int]],
