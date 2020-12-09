@@ -4,7 +4,7 @@ nnUNet_trained_models/
 result/
 COVID-19-20_TestSet/
 SampleSubmissionTest/
-
+__pycache__/
 
 *.cpython-37.pyc
 *.pyc
@@ -15,3 +15,5 @@ SampleSubmissionTest/
 *.png
 *.sh
 *.ts
+*.ipynb
+*.yml

@@ -35,11 +35,11 @@ source ./environment_setup.sh
 * --use_nnblock: if you want to use 3D nnblock, please use this argument
 * --use_ws : if you want to use weight standardization, please use this argument
 * --use_skip_attention : if you want to use skip attention, please use this argument
-
+* -w $path_to_pretrainedWeight : load pretrained weight by Model genesis (LUNA : https://drive.google.com/drive/folders/1ZEQHc4FLFHK204UJ1iABQVrjQOFmx_gX?usp=sharing)
 
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python nnunet/run/run_training.py 3d_fullres nnUNetTrainerV2 Task000_MYTASK all '$save_name' --use_nnblock --use_ws
+CUDA_VISIBLE_DEVICES=1 python nnunet/run/run_training.py 3d_fullres nnUNetTrainerV2 Task000_MYTASK all '$save_name' --use_nnblock --use_ws -w genesis_nnunet_luna16_006.model
 ```
 
 If you run above the script, you can find your training results:
@@ -73,10 +73,10 @@ CUDA_VISIBLE_DEVICES=1 python nnunet/inference/predict_simple.py -i nnUNet_raw_d
 
 ### Convert Data (for submission)
 
-If you finished the inference, you can check a new folder named $output_path
+If you finished the inference, you can check a new folder named $output_path and $folder_name.
 
 ```bash
-python convert_testformat.py --data_path='$output_path'
+python convert_testformat.py --data_path='$output_path' --save_path '$folder_name'
 ```
 
 

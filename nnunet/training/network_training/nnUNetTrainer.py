@@ -48,7 +48,7 @@ matplotlib.use("agg")
 class nnUNetTrainer(NetworkTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
                  unpack_data=True, deterministic=True, fp16=False, use_nnblock=False, use_ws=False, use_skip_attention=False,
-                 use_upseblock=False, use_downseblock=False, use_acm3d=False):
+                 use_upseblock=False, use_downseblock=False, use_acm3d=False, initial_lr=1e-2, lr_mode='poly'):
         """
         :param deterministic:
         :param fold: can be either [0 ... 5) for cross-validation, 'all' to train on all available training data or
@@ -77,7 +77,8 @@ class nnUNetTrainer(NetworkTrainer):
         self.unpack_data = unpack_data
         # when new arguments are added, they also must be set in init_args.
         self.init_args = (plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
-                          deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, use_acm3d)
+                          deterministic, fp16, use_nnblock, use_ws, use_skip_attention, use_upseblock, use_downseblock, 
+                          use_acm3d, initial_lr, lr_mode)
         # set through arguments from init
         self.stage = stage
         self.experiment_name = self.__class__.__name__
@@ -125,14 +126,42 @@ class nnUNetTrainer(NetworkTrainer):
 
         self.lr_scheduler_eps = 1e-3
         self.lr_scheduler_patience = 30
-        self.initial_lr = 3e-4
+        self.initial_lr = initial_lr
         self.weight_decay = 3e-5
 
         self.oversample_foreground_percent = 0.33
 
         self.conv_per_stage = None
         self.regions_class_order = None
-
+        
+    def load_pretrained_weights(self,fname):                                    
+        saved_model = torch.load(fname)                                         
+        pretrained_dict = saved_model['state_dict']                             
+        model_dict = self.network.state_dict()                                  
+        fine_tune = True                                                        
+        for key, _ in model_dict.items():                                       
+           if ('conv_blocks' in key):                                           
+               if (key in pretrained_dict) and (model_dict[key].shape == pretrained_dict[key].shape):
+                   continue                                                     
+               else:                                                            
+                   fine_tune = False                                            
+                   break                                                        
+        # filter unnecessary keys                                               
+        if fine_tune:                                                           
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if      
+                           (k in model_dict) and (model_dict[k].shape == pretrained_dict[k].shape)}
+            # 2. overwrite entries in the existing state dict                       
+            model_dict.update(pretrained_dict)                                  
+            # print(model_dict)                                                     
+            print("############################################### Loading pre-trained Models Genesis from ",fname)
+            print("Below is the list of overlapping blocks in pre-trained Models Genesis and nnUNet architecture:")
+            for key, _ in pretrained_dict.items():                              
+                print(key)                                                      
+            print("############################################### Done")                                                            
+            self.network.load_state_dict(model_dict)                            
+        else:                                                                   
+            print('############################################### Training from scratch')
+            
     def update_fold(self, fold):
         """
         used to swap between folds for inference (ensemble of models from cross-validation)
